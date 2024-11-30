@@ -74,6 +74,9 @@ const htmlEntities = {
 const decodeAndParseCodeContent = (preElement) => {
   return preElement.children
     .map((child) => {
+      if (child.type === "tag" && child.name === "p") {
+        return (child.children[0]?.data ?? "") + "\n"
+      }
       if (child.type === "tag" && child.name === "strong") {
         return child.children[0]?.data ?? ""
       }
@@ -105,8 +108,37 @@ const handleTableBasedCode = (node) => {
   return decodeAndParseCodeContent(codePre)
 }
 
+// Remove empty td elements from table-based layout content
+const handleContentTable = (node) => {
+  const tbody = node.children.find((child) => child.name === "tbody")
+  if (!tbody) {
+    return null
+  }
+
+  for (const tr of tbody.children) {
+    if (tr.name === "tr") {
+      tr.children = tr.children.filter(
+        (td) =>
+          td.name === "td" &&
+          td.children?.length > 0 &&
+          td.children.some((child) => child.data?.trim() || child.children?.length),
+      )
+    }
+  }
+
+  return node
+}
+
 const handleFigure = (node, imageSources, togglePhotoSlider) => {
   const firstChild = node.children[0]
+
+  // Handle code blocks wrapped in figure
+  if (firstChild?.name === "pre") {
+    const codeContent = decodeAndParseCodeContent(firstChild)
+    if (codeContent) {
+      return <CodeBlock>{codeContent}</CodeBlock>
+    }
+  }
 
   // Handle multiple images in figure
   if (node.children.some((child) => child.name === "img")) {
@@ -193,6 +225,8 @@ const getHtmlParserOptions = (imageSources, togglePhotoSlider) => ({
         return handleFigure(node, imageSources, togglePhotoSlider)
       case "video":
         return handleVideo(node)
+      case "table":
+        return handleContentTable(node)
       default:
         return node
     }
